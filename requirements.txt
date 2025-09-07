@@ -3,3 +3,5 @@ agno
 openai
 yfinance
 python-dotenv
+feedparser
+requests
