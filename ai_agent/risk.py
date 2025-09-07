@@ -1,203 +1,147 @@
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, asdict
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass
+from math import floor
+from typing import Optional, Any, Tuple, Dict, List, Literal
 
+import numpy as np
 import pandas as pd
+import math
 
-from .options import OptionsSnapshot
-
-
-__all__ = [
-    "RiskProfile",
-    "profile_params",
-    "equity_position_size",
-    "options_spread_size",
-    "sizing_summary_table",
-]
+# ATR helper
+from ai_agent.quant import atr_value_from_ticker
 
 
-# ---------------- Configuration ----------------
+# ----------------------------
+# Risk policy & small helpers
+# ----------------------------
 
-@dataclass(frozen=True)
+@dataclass
 class RiskProfile:
     name: str
-    # % of account equity you are willing to lose if the stop is hit
-    risk_per_trade_pct: float
-    # Multiplier on baseline stop distance derived from vol/implied move
-    stop_mult: float
+    risk_per_trade_frac: float  # e.g. 0.01 = 1%
+    # default fixed stop (if we have zero signal), used as a fallback
+    default_stop_pct: float
 
 
-def profile_params(name: str) -> RiskProfile:
-    """
-    Return parameters for a named risk profile.
-    Profiles are intentionally punchy; tune to your taste.
-    """
-    key = (name or "").strip().lower()
-    if key in ("conservative", "conserv", "c"):
-        # ~0.5% risk per trade, tighter stops
-        return RiskProfile("Conservative", risk_per_trade_pct=0.005, stop_mult=0.8)
-    if key in ("aggressive", "agg", "a"):
-        # ~2% risk per trade, wider stops
-        return RiskProfile("Aggressive", risk_per_trade_pct=0.02, stop_mult=1.25)
-    # default
-    return RiskProfile("Balanced", risk_per_trade_pct=0.01, stop_mult=1.0)
+PROFILE_MAP: Dict[str, RiskProfile] = {
+    "Conservative": RiskProfile("Conservative", risk_per_trade_frac=0.005, default_stop_pct=5.0),
+    "Balanced":     RiskProfile("Balanced",     risk_per_trade_frac=0.010, default_stop_pct=8.0),
+    "Aggressive":   RiskProfile("Aggressive",   risk_per_trade_frac=0.020, default_stop_pct=12.0),
+}
 
 
-# ---------------- Core math ----------------
-
-def _daily_vol_from_ann(vol20_ann_pct: Optional[float]) -> Optional[float]:
-    """
-    Convert 20-day annualized vol (%) to rough daily vol (%).
-    """
-    if vol20_ann_pct is None or math.isnan(vol20_ann_pct):
-        return None
-    return float(vol20_ann_pct) / math.sqrt(252.0)
+def _fmt_pct(x: Optional[float]) -> str:
+    if x is None or np.isnan(x):
+        return "—"
+    return f"{float(x):.2f}%"
 
 
-def _baseline_stop_pct(
-    *,
+def _fmt_money(x: Optional[float]) -> str:
+    if x is None or np.isnan(x):
+        return "—"
+    return f"${float(x):,.2f}"
+
+
+def _clamp(val: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, val))
+
+
+def _get_attr(obj: Any, name: str, default=None):
+    try:
+        return getattr(obj, name, default)
+    except Exception:
+        return default
+
+
+# -------------------------------------------------
+# Core sizing: baseline + ATR-based stop distances
+# -------------------------------------------------
+
+def _compute_baseline_stop_pct(
     implied_move_pct: Optional[float],
-    vol20_ann_pct: Optional[float],
-    dte: Optional[int],
+    profile: RiskProfile,
+) -> float:
+    """
+    Baseline stop as a % of entry.
+    If we have an implied move, use ~75% of it (clamped). Otherwise profile default.
+    """
+    if implied_move_pct is None or np.isnan(implied_move_pct):
+        return profile.default_stop_pct
+    # e.g., if implied move is 10%, baseline stop ≈ 7.5%, but clamp to sane bounds.
+    return _clamp(0.75 * float(implied_move_pct), 3.0, 20.0)
+
+
+def _compute_atr_stop_pct(
+    ticker: str,
+    spot: Optional[float],
+    profile: RiskProfile,
 ) -> Optional[float]:
     """
-    Construct a baseline stop distance (%) from:
-      - near-term implied move to expiry (scaled to a 1–2 week horizon), and
-      - recent realized daily vol (20d ann).
-    Use a blended, conservative estimate.
+    ATR-based stop as a % of entry.
+    - Conservative: 2.0 × ATR
+    - Balanced:     1.5 × ATR
+    - Aggressive:   1.0 × ATR
+    stop% = (ATR_mult * ATR$) / spot * 100
     """
-    dv = _daily_vol_from_ann(vol20_ann_pct)  # %
-    # scale implied move down to a 10-trading-day horizon
-    im = None
-    if implied_move_pct is not None and implied_move_pct > 0:
-        if dte and dte > 0:
-            # scale like sqrt(time): move_10d ≈ implied_move * sqrt(10 / DTE)
-            im = float(implied_move_pct) * math.sqrt(max(1.0, 10.0) / float(dte))
-        else:
-            # if no DTE, use half of the stated implied move
-            im = float(implied_move_pct) * 0.5
-
-    # if neither, bail
-    if dv is None and im is None:
+    if spot is None or spot <= 0:
         return None
-
-    # conservative blend: take min of (2*daily_vol, 0.75*scaled implied)
-    candidates = []
-    if dv is not None:
-        candidates.append(2.0 * dv)
-    if im is not None:
-        candidates.append(0.75 * im)
-
-    base = min(candidates) if candidates else None
-    # guardrails
-    if base is None:
+    atr_mult = {"Conservative": 2.0, "Balanced": 1.5, "Aggressive": 1.0}.get(profile.name, 1.5)
+    atr_val = atr_value_from_ticker(ticker, window=14, lookback_days=180, method="wilder")
+    if atr_val is None or np.isnan(atr_val) or atr_val <= 0:
         return None
-    # clip to a sane range (1% .. 15%)
-    return float(max(1.0, min(15.0, base)))
+    return (atr_mult * float(atr_val) / float(spot)) * 100.0
 
 
-def equity_position_size(
-    *,
+def _position_size_shares(
     account_equity: float,
+    stop_pct: Optional[float],
     spot: Optional[float],
-    stop_distance_pct: Optional[float],
-    risk_per_trade_pct: float,
-    min_lot: int = 1,
-) -> Dict[str, Optional[float]]:
+    risk_per_trade_frac: float,
+) -> Tuple[Optional[int], Optional[float]]:
     """
-    Position sizing for shares (LONG or SHORT) based on a % risk budget and stop distance.
-
-    Returns dict:
-      {
-        "shares": int or None,
-        "entry_value": float or None,
-        "risk_$": float or None,
-        "risk_%_equity": float,  # equals risk_per_trade_pct
-        "stop_distance_%": float or None
-      }
+    Returns (shares, dollar_risk_at_stop).
+    We risk `risk_per_trade_frac * account_equity`. Stop distance is stop_pct of entry.
+    shares = floor( risk$ / (stop_pct * entry) )
     """
-    if spot is None or spot <= 0 or stop_distance_pct is None or stop_distance_pct <= 0:
-        return {
-            "shares": None,
-            "entry_value": None,
-            "risk_$": None,
-            "risk_%_equity": risk_per_trade_pct * 100.0,
-            "stop_distance_%": stop_distance_pct,
-        }
+    if (
+        account_equity is None
+        or account_equity <= 0
+        or stop_pct is None
+        or spot is None
+        or stop_pct <= 0
+        or spot <= 0
+    ):
+        return None, None
 
-    risk_dollars = float(account_equity) * float(risk_per_trade_pct)
-    per_share_risk = float(spot) * (float(stop_distance_pct) / 100.0)
-    if per_share_risk <= 0:
-        return {
-            "shares": None,
-            "entry_value": None,
-            "risk_$": None,
-            "risk_%_equity": risk_per_trade_pct * 100.0,
-            "stop_distance_%": stop_distance_pct,
-        }
+    risk_dollars = float(account_equity) * float(risk_per_trade_frac)
+    stop_dollars_per_share = float(spot) * (float(stop_pct) / 100.0)
+    if stop_dollars_per_share <= 0:
+        return None, None
 
-    shares = int(max(min_lot, math.floor(risk_dollars / per_share_risk)))
-    entry_value = shares * float(spot)
-    return {
-        "shares": shares,
-        "entry_value": entry_value,
-        "risk_$": risk_dollars,
-        "risk_%_equity": risk_per_trade_pct * 100.0,
-        "stop_distance_%": stop_distance_pct,
-    }
+    shares = int(max(1, floor(risk_dollars / stop_dollars_per_share)))
+    dollar_risk = shares * stop_dollars_per_share
+    return shares, dollar_risk
 
 
-def options_spread_size(
-    *,
+def _contracts_from_debit(
     account_equity: float,
-    risk_per_trade_pct: float,
-    straddle_debit: Optional[float],
-    spot: Optional[float],
-    contracts_round_to: int = 1,
-) -> Dict[str, Optional[float]]:
+    risk_per_trade_frac: float,
+    est_debit_per_share: Optional[float],
+) -> Optional[int]:
     """
-    Very simple contract sizing for a **debit** options idea:
-      - assumes max loss ≈ debit per contract * 100
-      - uses the same risk budget in dollars
-
-    Returns dict:
-      {
-        "contracts": int or None,
-        "debit_per_contract": float or None,
-        "risk_$": float or None,
-        "risk_%_equity": float
-      }
+    Approximate number of option contracts using a per-share debit (×100 multiplier).
     """
-    if straddle_debit is None or straddle_debit <= 0 or spot is None or spot <= 0:
-        return {
-            "contracts": None,
-            "debit_per_contract": straddle_debit,
-            "risk_$": None,
-            "risk_%_equity": risk_per_trade_pct * 100.0,
-        }
-
-    risk_dollars = float(account_equity) * float(risk_per_trade_pct)
-    max_loss_per_contract = float(straddle_debit) * 100.0
-    if max_loss_per_contract <= 0:
-        return {
-            "contracts": None,
-            "debit_per_contract": straddle_debit,
-            "risk_$": None,
-            "risk_%_equity": risk_per_trade_pct * 100.0,
-        }
-
-    contracts = int(max(contracts_round_to, math.floor(risk_dollars / max_loss_per_contract)))
-    return {
-        "contracts": contracts,
-        "debit_per_contract": float(straddle_debit),
-        "risk_$": risk_dollars,
-        "risk_%_equity": risk_per_trade_pct * 100.0,
-    }
+    if est_debit_per_share is None or est_debit_per_share <= 0:
+        return None
+    risk_dollars = float(account_equity) * float(risk_per_trade_frac)
+    c = int(max(1, floor(risk_dollars / (float(est_debit_per_share) * 100.0))))
+    return c
 
 
-# ---------------- Convenience: build a small table ----------------
+# -------------------------------------------------
+# Public API used by the app
+# -------------------------------------------------
 
 def sizing_summary_table(
     *,
@@ -206,57 +150,236 @@ def sizing_summary_table(
     profile_name: str,
     spot: Optional[float],
     vol20_ann_pct: Optional[float],
-    opt: Optional[OptionsSnapshot],
+    opt: Any,
 ) -> pd.DataFrame:
     """
-    Produce a small, readable table with:
-      - baseline stop distance (from implied move / realized vol blend)
-      - equity share size for that stop
-      - option contracts sizing using ATM straddle debit as a rough proxy
+    Returns a 2-column DataFrame ["Metric", "Value"] summarizing
+    baseline and ATR-based sizing suggestions.
 
-    This is deliberately opinionated math to keep it simple and fast.
+    This is defensive: it works if some inputs are missing.
     """
-    prof = profile_params(profile_name)
-    implied = opt.implied_move_pct if opt else None
-    dte = opt.dte if opt else None
+    # Resolve profile
+    profile: RiskProfile = PROFILE_MAP.get(profile_name, PROFILE_MAP["Balanced"])
+    risk_frac = profile.risk_per_trade_frac
 
-    stop_pct_base = _baseline_stop_pct(implied_move_pct=implied, vol20_ann_pct=vol20_ann_pct, dte=dte)
-    stop_pct = None if stop_pct_base is None else float(stop_pct_base) * float(prof.stop_mult)
+    # Pull option context (defensively)
+    implied_move_pct = _get_attr(opt, "implied_move_pct", None)
+    straddle_debit = _get_attr(opt, "straddle_debit", None)
+    call_mid = _get_attr(opt, "call_mid", None)
 
-    eq = equity_position_size(
+    # Prefer a realistic single-leg debit for rough option sizing; fall back to straddle.
+    est_debit = None
+    if call_mid is not None and call_mid > 0:
+        est_debit = float(call_mid)
+    elif straddle_debit is not None and straddle_debit > 0:
+        # rough: assume half the straddle cost for a directional single-leg reference
+        est_debit = float(straddle_debit) * 0.5
+
+    # -------------------------
+    # Baseline (implied-move)
+    # -------------------------
+    base_stop_pct = _compute_baseline_stop_pct(implied_move_pct, profile)
+    base_shares, base_dollar_risk = _position_size_shares(
         account_equity=account_equity,
+        stop_pct=base_stop_pct,
         spot=spot,
-        stop_distance_pct=stop_pct,
-        risk_per_trade_pct=prof.risk_per_trade_pct,
+        risk_per_trade_frac=risk_frac,
+    )
+    base_contracts = _contracts_from_debit(
+        account_equity=account_equity,
+        risk_per_trade_frac=risk_frac,
+        est_debit_per_share=est_debit,
     )
 
-    opt_size = options_spread_size(
+    # -------------------------
+    # ATR-based
+    # -------------------------
+    atr_stop_pct = _compute_atr_stop_pct(ticker=ticker, spot=spot, profile=profile)
+    atr_shares, atr_dollar_risk = _position_size_shares(
         account_equity=account_equity,
-        risk_per_trade_pct=prof.risk_per_trade_pct,
-        straddle_debit=(opt.straddle_debit if opt else None),
+        stop_pct=atr_stop_pct,
         spot=spot,
+        risk_per_trade_frac=risk_frac,
     )
 
-    def fmt(x, pct=False):
-        if x is None or (isinstance(x, float) and math.isnan(x)):
-            return "—"
-        try:
-            v = float(x)
-        except Exception:
-            return "—"
-        return f"{v:.2f}%" if pct else (f"{int(v)}" if abs(v - int(v)) < 1e-9 and not pct else f"{v:.2f}")
+    # -------------------------
+    # Assemble rows
+    # -------------------------
+    rows: List[Tuple[str, str]] = []
 
-    rows = [
-        ("Profile", prof.name, ""),
-        ("Equity ($)", f"{account_equity:,.0f}", ""),
-        ("Baseline stop %", fmt(stop_pct, pct=True), ""),
-        ("Shares (approx.)", fmt(eq.get("shares")), ""),
-        ("Entry value ($)", fmt(eq.get("entry_value")), ""),
-        ("Risk $", fmt(eq.get("risk_$")), ""),
-        ("Risk % of equity", fmt(eq.get("risk_%_equity"), pct=True), ""),
-        ("Options contracts (≈ debit)", fmt(opt_size.get("contracts")), ""),
-        ("Debit / contract ($)", fmt((opt.straddle_debit if opt else None))), "",
-    ]
+    rows.append(("Account equity ($)", _fmt_money(account_equity)))
+    rows.append(("Risk per trade (%)", _fmt_pct(risk_frac * 100.0)))
+    if spot is not None:
+        rows.append(("Spot (approx.)", _fmt_money(spot)))
+    if vol20_ann_pct is not None:
+        rows.append(("Realized vol (20d, ann.)", _fmt_pct(vol20_ann_pct)))
 
-    df = pd.DataFrame(rows, columns=[f"{ticker} sizing", "Value", ""])
+    # Baseline rows (labels used elsewhere in the app)
+    rows.append(("Baseline stop %", _fmt_pct(base_stop_pct)))
+    if base_shares is not None:
+        rows.append(("Shares (approx.)", f"{base_shares:,d}"))
+    if base_dollar_risk is not None:
+        rows.append(("Dollar risk at stop", _fmt_money(base_dollar_risk)))
+    if base_contracts is not None:
+        rows.append(("Options contracts (≈ debit)", f"{base_contracts:,d}"))
+
+    # ATR rows
+    rows.append(("ATR stop %", _fmt_pct(atr_stop_pct)))
+    if atr_shares is not None:
+        rows.append(("ATR shares (approx.)", f"{atr_shares:,d}"))
+    if atr_dollar_risk is not None:
+        rows.append(("ATR dollar risk at stop", _fmt_money(atr_dollar_risk)))
+
+    df = pd.DataFrame(rows, columns=["Metric", "Value"])
     return df
+
+# === Trade Plan (entry/stop/targets, R:R) ==========================
+from dataclasses import dataclass
+from typing import Optional, Literal, Dict
+import math
+
+@dataclass
+class TradePlan:
+    ticker: str
+    direction: Literal["long", "short"]
+    entry: float                  # assumed entry (uses spot)
+    stop: float                   # hard stop
+    risk_per_share: float         # |entry - stop|
+    target1: float                # ~1.5R
+    target2: float                # ~3R
+    risk_budget_usd: float        # $ risk per trade from profile
+    suggested_shares: int         # floor(risk_budget / risk_per_share)
+    rr_at_t1: float               # target1 R multiple
+    rr_at_t2: float               # target2 R multiple
+    method: str                   # how we computed the stop (ATR / implied move)
+    notes: Optional[str] = None
+
+    def to_dataframe(self):
+        import pandas as pd
+        rows = [
+            ("Direction", self.direction.upper()),
+            ("Entry", f"${self.entry:,.2f}"),
+            ("Stop", f"${self.stop:,.2f}"),
+            ("Risk/share", f"${self.risk_per_share:,.2f}"),
+            ("Target 1 (~1.5R)", f"${self.target1:,.2f}"),
+            ("Target 2 (~3R)", f"${self.target2:,.2f}"),
+            ("Risk budget", f"${self.risk_budget_usd:,.2f}"),
+            ("Suggested size (shares)", f"{self.suggested_shares:,}"),
+            ("R at T1", f"{self.rr_at_t1:.2f}R"),
+            ("R at T2", f"{self.rr_at_t2:.2f}R"),
+            ("Stop method", self.method),
+        ]
+        if self.notes:
+            rows.append(("Notes", self.notes))
+        return pd.DataFrame(rows, columns=["Metric", "Value"])
+
+def _profile_risk_budget(profile: str, account_equity: float) -> float:
+    """Risk per trade as a fraction of equity."""
+    p = (profile or "Balanced").lower()
+    if p.startswith("cons"):
+        frac = 0.005    # 0.5%
+    elif p.startswith("aggr"):
+        frac = 0.02     # 2.0%
+    else:
+        frac = 0.01     # 1.0%
+    return max(0.0, float(account_equity)) * frac
+
+def _approx_atr_pct_from_ann_vol(vol20_ann_pct: Optional[float]) -> Optional[float]:
+    """
+    If ATR% not available, approximate from annualized vol:
+      daily sigma ≈ ann_vol / sqrt(252)
+      ATR% ≈ daily sigma * 1.4 (rule-of-thumb)
+    """
+    try:
+        ann = float(vol20_ann_pct)
+        if not math.isfinite(ann) or ann <= 0:
+            return None
+        daily = ann / math.sqrt(252.0)
+        return daily * 1.4
+    except Exception:
+        return None
+
+def build_trade_plan(
+    *,
+    ticker: str,
+    direction: str,
+    spot: Optional[float],
+    account_equity: float,
+    risk_profile: str,
+    vol20_ann_pct: Optional[float] = None,
+    implied_move_pct: Optional[float] = None,
+    atr_pct_hint: Optional[float] = None,
+) -> TradePlan:
+    """
+    Compute a simple, consistent plan:
+      - Entry = spot
+      - Stop% = max( 1.2×ATR%, 0.5×implied_move% ), fallback to 3%
+      - Targets = entry ± {1.5R, 3R}
+      - Risk budget = profile % of equity → suggested size
+    All '%' values are in percent units (e.g., 20.0 = 20%).
+    """
+    if spot is None:
+        raise ValueError("Spot price required for trade plan.")
+
+    side_long = str(direction).lower().startswith("long")
+
+    # % stops
+    atr_pct = atr_pct_hint
+    if atr_pct is None:
+        atr_pct = _approx_atr_pct_from_ann_vol(vol20_ann_pct)  # may still be None
+
+    imp = None
+    try:
+        imp = float(implied_move_pct) if implied_move_pct is not None else None
+    except Exception:
+        pass
+
+    # base stop percent
+    candidates = []
+    if atr_pct is not None and atr_pct > 0:
+        candidates.append(1.2 * atr_pct)
+    if imp is not None and imp > 0:
+        candidates.append(0.5 * imp)
+    stop_pct = max(candidates) if candidates else 3.0  # % fallback
+
+    # clamp sensible range
+    stop_pct = min(max(stop_pct, 1.0), 12.0)
+
+    # prices
+    if side_long:
+        stop = float(spot) * (1.0 - stop_pct / 100.0)
+        risk_per_share = float(spot) - stop
+        t1 = float(spot) + 1.5 * risk_per_share
+        t2 = float(spot) + 3.0 * risk_per_share
+    else:
+        stop = float(spot) * (1.0 + stop_pct / 100.0)
+        risk_per_share = stop - float(spot)
+        t1 = float(spot) - 1.5 * risk_per_share
+        t2 = float(spot) - 3.0 * risk_per_share
+
+    risk_budget = _profile_risk_budget(risk_profile, float(account_equity))
+    shares = int(max(0.0, math.floor(risk_budget / max(risk_per_share, 1e-6))))
+
+    rr_t1 = 1.5
+    rr_t2 = 3.0
+
+    method = "max(1.2×ATR%, 0.5×implied move%)"
+    notes = None
+    if atr_pct is None and imp is None:
+        notes = "Fallback stop% used (3%)."
+
+    return TradePlan(
+        ticker=ticker,
+        direction="long" if side_long else "short",
+        entry=float(spot),
+        stop=round(stop, 2),
+        risk_per_share=round(risk_per_share, 2),
+        target1=round(t1, 2),
+        target2=round(t2, 2),
+        risk_budget_usd=round(risk_budget, 2),
+        suggested_shares=shares,
+        rr_at_t1=rr_t1,
+        rr_at_t2=rr_t2,
+        method=method,
+        notes=notes,
+    )

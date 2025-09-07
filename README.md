@@ -31,17 +31,35 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
 
 -- ATM call/put mids, ATM strike, straddle debit, implied move, approximate ATM IV
 
+-- ATM Greeks (per contract)
+
+-- Strategy Picker (debit/credit verticals, CSP, covered/collar) with add-to-report and add-to-tickets
+
 - Position sizing
 
 -- Profile-based risk budget (Conservative / Balanced / Aggressive)
 
 -- Equity share size and debit options contract count using implied move and recent vol
 
+-- Baseline (implied-move anchored) and ATR-based sizing, plus a stock Trade Plan (entry/stop/targets)
+
 - Time-aware prompt
 
 -- Today’s date is passed to the model; it avoids guessing dates and labels past vs upcoming items
 
-- Download the full report as Markdown (includes metadata, facts, options table, and the model’s analysis)
+- Fundamentals (TTM) with extended valuation/returns: P/E, P/S, EV/EBITDA, ROIC (approx)
+
+- Pair Analyzer (beta-hedged spread) with z-score guidance around ±2.0
+
+- Event Playbook (earnings/SEC/regime-aware tactics) per ticker
+
+- Scenarios & Payoff charts (stock per share and option per contract) using implied move as σ proxy
+
+- Trade Tickets (CSV) built from sizing/options and Strategy Picker; preview in-app
+
+- Download the full report as Markdown and PDF (PDF includes fundamentals, catalysts, pair notes, sizing notes, strategies, playbook, scenarios, tickets)
+
+- Sidebar controls: source toggles, expiry mode, and a “Refresh caches” button
 
 - Two-way OpenAI key handling and .env/secrets integration
 
@@ -109,21 +127,26 @@ AI_Investment_Agent/
 │  ├─ prices.py                  # price history merge, normalization, chart data
 │  ├─ metrics.py                 # snapshots, returns/momentum, compare table, facts pack
 │  ├─ options.py                 # expiry list, ATM snapshot, implied move, IV
-│  ├─ risk.py                    # risk profiles, stop distance, share/contract sizing
+│  ├─ greeks.py                  # Black–Scholes + ATM Greeks table (per contract)
+│  ├─ quant.py                   # OHLC/close helpers, ATR/vol, pair analytics
+│  ├─ risk.py                    # risk profiles, baseline+ATR sizing, stock Trade Plan
+│  ├─ scenario.py                # scenarios & dense payoff grid for charts
+│  ├─ strategies.py              # build/format strategies for Options tab
+│  ├─ tickets.py                 # trade tickets + CSV export
+│  ├─ playbook.py                # event-driven tactics builder
 │  ├─ prompts.py                 # time-aware, structured prompt builder (no italics/bold)
 │  ├─ agent.py                   # OpenAI agent wrapper
-│  └─ export.py                  # sanitize + build Markdown export
-├─ requirements.txt              # streamlit, openai, yfinance, pandas, python-dotenv, feedparser, requests
+│  └─ export.py                  # sanitize + build Markdown + PDF export
+├─ requirements.txt              # streamlit, agno, openai, yfinance, pandas, python-dotenv, feedparser requests, reportlab
 ├─ .gitignore                    # ignores .env, venv, caches, editor files
 └─ README.md
 ```
 
 ## Configuration
-1. The app looks for an OpenAI key in this order:
-2. st.session_state["openai_api_key"] when you paste a key in the UI
-3. Environment variables loaded from .env
-
-st.secrets["OPENAI_API_KEY"] when using .streamlit/secrets.toml
+The app looks for an OpenAI key in this order:
+1. `st.session_state["openai_api_key"]` when you paste a key in the UI
+2. Environment variables loaded from `.env`
+3. `st.secrets["OPENAI_API_KEY"]` when using `.streamlit/secrets.toml`
 
 ### Environment variables:
 
@@ -138,6 +161,25 @@ Optional Streamlit secrets file:
 ```markdown
 .streamlit/secrets.toml
 OPENAI_API_KEY = "sk-********************************"
+```
+
+Optional Streamlit theme/config:
+
+```toml
+# .streamlit/config.toml
+[theme]
+base = "dark"
+primaryColor = "#00C805"
+backgroundColor = "#0A0F14"
+secondaryBackgroundColor = "#11181F"
+textColor = "#E6F2E6"
+font = "Inter"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
 ```
 
 ## License

@@ -7,6 +7,9 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
+# reuse our close fetcher from quant
+from ai_agent.quant import fetch_close_series
+
 __all__ = [
     "timeframe_params",
     "load_prices",
@@ -112,3 +115,22 @@ def merge_for_compare(ticker_a: str, ticker_b: str, tf: str, normalize: bool = T
                 if pd.notna(base) and float(base) != 0.0:
                     df[col] = (df[col] / float(base)) * 100.0
     return df
+
+def get_spark_series(ticker: str, months: int = 3, normalize: bool = True) -> pd.Series:
+    """
+    Return a small close-price series for sparkline display.
+    - months: window length (≈ months*30 days)
+    - normalize=True -> index starts at 100 for easy comparison
+    """
+    lookback_days = max(10, int(months * 30))
+    s = fetch_close_series(ticker, lookback_days=lookback_days, interval="1d")
+    if s is None or s.empty:
+        return pd.Series(dtype=float, name=ticker)
+
+    s = s.dropna().sort_index()
+    if normalize:
+        base = float(s.iloc[0])
+        if base not in (None, 0):
+            s = (s / base) * 100.0
+    s.name = ticker
+    return s
