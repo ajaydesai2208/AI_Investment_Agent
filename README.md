@@ -1,6 +1,6 @@
 # 📈 AI Investment Agent
 
-A simple Streamlit app that compares two stock tickers using Yahoo Finance data with an AI agent powered by OpenAI.  
+A Streamlit app that compares two stock tickers using Yahoo Finance data with an AI agent powered by OpenAI.  
 It generates a clear markdown report with tables, pros and cons, and a balanced comparison.
 
 **Key behavior:** the app uses a two-way OpenAI key flow.
