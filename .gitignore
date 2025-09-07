@@ -1,0 +1,20 @@
+# Python env/build
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Local secrets
+.env
+.env.*
+*.env
+.streamlit/secrets.toml
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
