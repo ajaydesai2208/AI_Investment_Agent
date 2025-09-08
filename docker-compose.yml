@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    image: ai-investment-agent:latest
+    ports:
+      - "8501:8501"
+    environment:
+      AI_AGENT_UI_KEY_ONLY: "1"   # enforce UI-only key in prod/public runs
+      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      STREAMLIT_SERVER_PORT: 8501
+      STREAMLIT_BROWSER_GATHERUSAGESTATS: "false"
+    restart: unless-stopped

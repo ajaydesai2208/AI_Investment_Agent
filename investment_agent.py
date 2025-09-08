@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 from datetime import datetime, timezone, date
 import time
 import re
+import threading
+import hashlib
 
 import numpy as np
 import pandas as pd
@@ -181,6 +183,25 @@ def _fmt_num(x: Optional[float], pct: bool = False, money: bool = False) -> str:
     if money:
         return f"${v:,.2f}"
     return f"{v:.2f}"
+
+
+# Background cache refresher: clears news/catalysts every 3 hours
+def _background_cache_refresher():
+    while True:
+        try:
+            clear_news_cache()
+            clear_catalyst_cache()
+        except Exception:
+            pass
+        time.sleep(3 * 60 * 60)
+
+# Start once per process/session
+if not st.session_state.get("bg_refresher_started"):
+    try:
+        threading.Thread(target=_background_cache_refresher, daemon=True).start()
+    except Exception:
+        pass
+    st.session_state["bg_refresher_started"] = True
 
 
 def _is_valid_ticker(s: Optional[str]) -> bool:
@@ -669,6 +690,17 @@ with tab_news:
         news_b_all = get_recent_news(ticker_b, lookback_days, max_news, **news_kwargs) if hf_mode else {"merged": [], "by_source": {}}
         news_a = news_a_all["merged"]
         news_b = news_b_all["merged"]
+
+        # Compute a simple news digest hash to detect updates
+        try:
+            digest_str = str(news_a) + "|" + str(news_b)
+            digest = hashlib.sha256(digest_str.encode("utf-8")).hexdigest()
+            prev = st.session_state.get("news_digest_hash")
+            st.session_state["news_digest_hash"] = digest
+            if prev and prev != digest:
+                st.info("News updated since your last analysis. Consider re-running the report to reflect changes.")
+        except Exception:
+            pass
 
         coln1, coln2 = st.columns(2)
         with coln1:
