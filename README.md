@@ -1,5 +1,8 @@
 # 📈 AI Investment Agent
 
+[![Live Demo – Cloud Run](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](https://ai-investment-agent-882282180225.us-east5.run.app/)
+
+
 A Streamlit app that compares two stock tickers using Yahoo Finance data with an AI agent powered by OpenAI.  
 It generates a clear markdown report with tables, pros and cons, and a balanced comparison.
 
