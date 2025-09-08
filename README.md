@@ -61,6 +61,18 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
 
 - Sidebar controls: source toggles, expiry mode, and a “Refresh caches” button
 
+- Strategy comparison: select up to 2 strategies and compare Net (Debit/Credit), Max Loss/Gain, Breakevens, DTE, R:R, and Capital Requirement
+
+- High-contrast mode toggle (Display section) for brighter text and borders on the dark theme
+
+- Position sizing: inline risk budget badge (e.g., “$250 at 1%”) based on profile and account equity
+
+- Inline cache TTL hints: News ~15m (SEC ticker map ~24h), Options ~5m
+
+- Skeleton loaders: lightweight shimmering placeholders during data fetches
+
+- Safety: “Compare & Analyze” is disabled until both tickers are valid
+
 - Two-way OpenAI key handling and .env/secrets integration
 
 - .env is git-ignored by default
