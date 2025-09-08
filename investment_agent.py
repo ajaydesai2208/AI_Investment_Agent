@@ -73,6 +73,10 @@ st.markdown(
         padding: 0.55rem 0.9rem;
         transition: transform .06s ease, box-shadow .2s ease, filter .2s ease;
         box-shadow: 0 8px 24px rgba(0,200,5,.15), 0 0 0 1px rgba(0,200,5,.18) inset;
+        width: 100%;
+        min-height: 90px; /* ensure uniform height across wrapped/one-line labels */
+        display: inline-flex; align-items: center; justify-content: center; /* vertical centering */
+        text-align: center; white-space: normal; line-height: 1.15; /* allow wrapping but keep height consistent */
       }
       .stButton>button:hover, .stDownloadButton>button:hover {
         transform: translateY(-1px);
@@ -118,10 +122,49 @@ st.markdown(
         font-size: .86rem;
         color: #AEE8B1;
       }
+      /* Regime-specific pill accents */
+      .pill.neutral { border-color: rgba(180,180,180,.35); background: rgba(180,180,180,.10); color: #D9DEE3; }
+      .pill.calm { border-color: rgba(0,200,5,.35); background: rgba(0,200,5,.10); color: #AEE8B1; }
+      .pill.stressed { border-color: rgba(255,60,60,.35); background: rgba(255,60,60,.10); color: #FFC1C1; }
+      /* Sticky stat bar (removed) */
+      /* High-contrast overrides */
+      body.high-contrast .card { border-color: rgba(255,255,255,.28); box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+      body.high-contrast div[data-testid="stDataFrame"] thead tr th { border-bottom-color: rgba(255,255,255,.35); }
+      body.high-contrast .stat-card { border-color: rgba(255,255,255,.28); box-shadow: 0 0 0 1px rgba(255,255,255,.10); }
+      body.high-contrast .pill { border-color: rgba(255,255,255,.35); color: #F3F6F9; }
+      /* Skeleton loaders */
+      @keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
+      .skel-table { border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 12px; background: rgba(255,255,255,.02); }
+      .skel-row { height: 14px; margin: 10px 0; border-radius: 6px; background: #121820; background-image: linear-gradient(90deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.15) 20%, rgba(255,255,255,0.05) 40%); background-size: 800px 100%; animation: shimmer 1.2s infinite; }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# Apply high-contrast class on body when toggled (reads from session state)
+try:
+    if bool(st.session_state.get("ui_high_contrast", False)):
+        st.markdown(
+            """
+            <script>
+            document.documentElement.classList.add('high-contrast');
+            document.body.classList.add('high-contrast');
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+            <script>
+            document.documentElement.classList.remove('high-contrast');
+            document.body.classList.remove('high-contrast');
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+except Exception:
+    pass
 
 
 # ---------------- Helpers (shared) ----------------
@@ -138,6 +181,17 @@ def _fmt_num(x: Optional[float], pct: bool = False, money: bool = False) -> str:
     if money:
         return f"${v:,.2f}"
     return f"{v:.2f}"
+
+
+def _is_valid_ticker(s: Optional[str]) -> bool:
+    """Basic client-side ticker validation: A–Z/0–9/./- up to 10 chars."""
+    if not s:
+        return False
+    try:
+        t = str(s).strip().upper()
+    except Exception:
+        return False
+    return bool(re.fullmatch(r"[A-Z0-9.\-]{1,10}", t))
 
 
 def _default_expiry_index(exps: list[str]) -> int:
@@ -184,6 +238,16 @@ def _regime_label(implied_move_pct: Optional[float], vol20_ann_pct: Optional[flo
         return "Normal"
     except Exception:
         return "—"
+
+
+def _regime_css_class(regime_label: Optional[str]) -> str:
+    """Return CSS class for regime pill: 'calm' | 'stressed' | 'neutral' (default)."""
+    s = (regime_label or "").strip().lower()
+    if s.startswith("calm"):
+        return "calm"
+    if s.startswith("stress"):
+        return "stressed"
+    return "neutral"
 
 
 def _infer_direction_for(
@@ -293,6 +357,7 @@ for key, default in [
     ("export_bytes", None),
     ("selected_strategies_md", []),
     ("tickets_extra", []),
+    ("ui_high_contrast", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -318,6 +383,13 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
+    st.subheader("Display")
+    high_contrast = st.toggle(
+        "High-contrast mode",
+        value=bool(st.session_state.get("ui_high_contrast", False)),
+        help="Brighter text and borders for dark theme",
+    )
+    st.session_state["ui_high_contrast"] = bool(high_contrast)
     st.subheader("Strategy Controls")
     hf_mode = st.checkbox("Enable hedge-fund-style analysis", value=True)
     lookback_days = st.slider("News lookback (days)", 1, 60, 30)
@@ -351,6 +423,9 @@ col1, col2 = st.columns(2)
 ticker_a = col1.text_input("Ticker A", value="NVDA").strip().upper()
 ticker_b = col2.text_input("Ticker B", value="ANET").strip().upper()
 
+# Basic validity check before enabling action
+tickers_ok = _is_valid_ticker(ticker_a) and _is_valid_ticker(ticker_b)
+
 expiry_a = None
 expiry_b = None
 if expiry_mode.startswith("Pick"):
@@ -366,8 +441,14 @@ if expiry_mode.startswith("Pick"):
     else:
         col4.write(f"• No expiries found for {ticker_b}")
 
-# Action button
-go = st.button("Compare & Analyze", use_container_width=True)
+# Action button (disabled until valid)
+go = st.button("Compare & Analyze", use_container_width=True, disabled=not tickers_ok)
+
+if not tickers_ok:
+    st.caption("Enter two valid tickers (A–Z, 0–9, '.', '-'). Example: AAPL, MSFT")
+    # Early guard to avoid downstream loaders when a ticker is empty/invalid
+    st.info("Enter two valid tickers to load data.")
+    st.stop()
 
 # A visible status/progress bar right under the button (global, works from any tab)
 status_container = st.container()
@@ -376,18 +457,61 @@ status_container = st.container()
 # ---------------- Snapshots, Options, Catalysts, Pair (preload for tabs) ----------------
 
 with st.spinner("Loading snapshots & factors..."):
-    a_snap = snapshot(ticker_a)
-    b_snap = snapshot(ticker_b)
+    try:
+        a_snap = snapshot(ticker_a)
+        b_snap = snapshot(ticker_b)
+    except Exception:
+        a_snap, b_snap = {}, {}
+        st.markdown(
+            """
+            <div class="skel-table">
+              <div class="skel-row" style="width:40%"></div>
+              <div class="skel-row" style="width:85%"></div>
+              <div class="skel-row" style="width:90%"></div>
+              <div class="skel-row" style="width:70%"></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 with st.spinner("Fetching options snapshot..."):
-    opt_a: OptionsSnapshot = options_snapshot(ticker_a, expiry=expiry_a if expiry_mode.startswith("Pick") else None)
-    opt_b: OptionsSnapshot = options_snapshot(ticker_b, expiry=expiry_b if expiry_mode.startswith("Pick") else None)
+    try:
+        opt_a: OptionsSnapshot = options_snapshot(ticker_a, expiry=expiry_a if expiry_mode.startswith("Pick") else None)
+        opt_b: OptionsSnapshot = options_snapshot(ticker_b, expiry=expiry_b if expiry_mode.startswith("Pick") else None)
+    except Exception:
+        from types import SimpleNamespace
+        opt_a = SimpleNamespace(spot=None, implied_move_pct=None, dte=None, expiry=None, atm_iv_pct=None, call_mid=None, put_mid=None, atm_strike=None, straddle_debit=None)
+        opt_b = SimpleNamespace(spot=None, implied_move_pct=None, dte=None, expiry=None, atm_iv_pct=None, call_mid=None, put_mid=None, atm_strike=None, straddle_debit=None)
+        st.markdown(
+            """
+            <div class=\"skel-table\">
+              <div class=\"skel-row\" style=\"width:50%\"></div>
+              <div class=\"skel-row\" style=\"width:92%\"></div>
+              <div class=\"skel-row\" style=\"width:88%\"></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 with st.spinner("Scanning catalysts (earnings & SEC filings)..."):
-    cat_a = get_catalysts(ticker_a)
-    cat_b = get_catalysts(ticker_b)
-    cat_md_a = format_catalysts_md(ticker_a, cat_a)
-    cat_md_b = format_catalysts_md(ticker_b, cat_b)
+    try:
+        cat_a = get_catalysts(ticker_a)
+        cat_b = get_catalysts(ticker_b)
+        cat_md_a = format_catalysts_md(ticker_a, cat_a)
+        cat_md_b = format_catalysts_md(ticker_b, cat_b)
+    except Exception:
+        cat_a = cat_b = {"sec_filings": [], "asof": None}
+        cat_md_a = cat_md_b = ""
+        st.markdown(
+            """
+            <div class=\"skel-table\">
+              <div class=\"skel-row\" style=\"width:30%\"></div>
+              <div class=\"skel-row\" style=\"width:70%\"></div>
+              <div class=\"skel-row\" style=\"width:60%\"></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # Pair analyzer guarded so it never crashes the app
 from types import SimpleNamespace
@@ -424,7 +548,7 @@ st.markdown(
           <span class="pill">Imp Move {_fmt_num(opt_a.implied_move_pct, pct=True)}</span>
           <span class="pill">DTE {opt_a.dte or "—"}</span>
           <span class="pill">Trend {trend_a}</span>
-          <span class="pill">Regime {regime_a}</span>
+          <span class="pill {_regime_css_class(regime_a)}">Regime {regime_a}</span>
         </div>
       </div>
       <div class="stat-card">
@@ -434,7 +558,7 @@ st.markdown(
           <span class="pill">Imp Move {_fmt_num(opt_b.implied_move_pct, pct=True)}</span>
           <span class="pill">DTE {opt_b.dte or "—"}</span>
           <span class="pill">Trend {trend_b}</span>
-          <span class="pill">Regime {regime_b}</span>
+          <span class="pill {_regime_css_class(regime_b)}">Regime {regime_b}</span>
         </div>
       </div>
       <div class="stat-card">
@@ -493,6 +617,8 @@ with tab_overview:
             st.caption("Index = 100 at the start of the selected period.")
         st.line_chart(chart_df, height=360, use_container_width=True)
 
+    # (Timeframe chips removed)
+
     st.markdown("#### Snapshot & Factors")
     st.dataframe(compare_table(a_snap, b_snap), use_container_width=True)
     # NEW — Fundamentals (TTM) tables
@@ -535,7 +661,7 @@ with tab_overview:
 with tab_news:
     st.markdown("#### Recent News & Filings (used as model context)")
     st.caption(
-        "Enable/disable sources in the sidebar • Adjust lookback/max items • Click **Compare & Analyze** to fetch latest."
+        "Enable/disable sources in the sidebar • Adjust lookback/max items • Click **Compare & Analyze** to fetch latest. (cached ~15m; SEC map ~24h)"
     )
     if go:
         news_kwargs = dict(use_rss=use_rss, use_yf=use_yf, use_reuters=use_reuters, use_sec=use_sec)
@@ -574,7 +700,7 @@ with tab_options:
     if expiry_mode.startswith("Pick"):
         st.caption("Using your selected expiries.")
     else:
-        st.caption("Auto mode: nearest expiry in a ~7–45 DTE window.")
+        st.caption("Auto mode: nearest expiry in a ~7–45 DTE window. (cached ~5m)")
 
     opt_rows = [
         ("Expiry (DTE)", f"{opt_a.expiry or '—'} ({opt_a.dte or '—'})", f"{opt_b.expiry or '—'} ({opt_b.dte or '—'})"),
@@ -658,6 +784,10 @@ with tab_options:
     # We already computed these directions above for Greeks:
     # _dir_a, _dir_b; and we have trend_a/trend_b + regime_a/regime_b + risk_profile.
 
+    # Init compare selection state
+    if "strategy_compare" not in st.session_state:
+        st.session_state["strategy_compare"] = []
+
     try:
         plans_a = suggest_strategies(
             ticker=ticker_a,
@@ -705,16 +835,16 @@ with tab_options:
                 except Exception:
                     st.write(p.to_dataframe())
                 # Actions
-                c1, c2 = st.columns([1, 1])
+                c1, c2, c3 = st.columns([1, 1, 1])
                 with c1:
-                    if st.button(f"Add to Report: {ticker} — {p.name}", key=f"add_plan_{ticker}_{i}"):
+                    if st.button("Add to Report", key=f"add_plan_{ticker}_{i}"):
                         md = plans_to_markdown([p])
                         lst = st.session_state.get("selected_strategies_md") or []
                         lst.append(md)
                         st.session_state["selected_strategies_md"] = lst
-                        st.success("Added to Report (see Report tab).")
+                        st.success(f"Added to Report: {ticker} — {p.name} (see Report tab).")
                 with c2:
-                    if st.button(f"Send to Tickets: {ticker} — {p.name}", key=f"send_plan_{ticker}_{i}"):
+                    if st.button("Send to Tickets", key=f"send_plan_{ticker}_{i}"):
                         try:
                             extra = build_tickets_from_strategy(p, fallback_ticker=ticker)
                         except Exception:
@@ -723,19 +853,94 @@ with tab_options:
                             buf = list(st.session_state.get("tickets_extra") or [])
                             buf.extend(extra)
                             st.session_state["tickets_extra"] = buf
-                            st.success(f"Added {len(extra)} leg(s) to Tickets (Report tab).")
+                            st.success(f"Added {len(extra)} leg(s) to Tickets: {ticker} — {p.name} (Report tab).")
                         else:
                             st.info("No legs could be parsed for this plan.")
+                with c3:
+                    sel: list = st.session_state.get("strategy_compare") or []
+                    is_selected = any((x.get("ticker") == ticker and x.get("name") == p.name) for x in sel)
+                    at_limit = (len(sel) >= 2) and not is_selected
+                    if not is_selected:
+                        if st.button("Select for Compare", key=f"sel_{ticker}_{i}", disabled=at_limit):
+                            entry = {
+                                "ticker": ticker,
+                                "name": p.name,
+                                "dte": getattr(p, "dte", None),
+                                "debit_credit": getattr(p, "debit_credit", None),
+                                "est_cost": getattr(p, "est_cost", None),
+                                "est_credit": getattr(p, "est_credit", None),
+                                "max_loss": getattr(p, "max_loss", None),
+                                "max_gain": getattr(p, "max_gain", None),
+                                "breakevens": list(getattr(p, "breakevens", []) or []),
+                                "rr_ratio": getattr(p, "rr_ratio", None),
+                                "capital_req": getattr(p, "capital_req", None),
+                            }
+                            st.session_state["strategy_compare"] = sel + [entry]
+                            st.rerun()
+                    else:
+                        if st.button("Remove from Compare", key=f"unsel_{ticker}_{i}"):
+                            st.session_state["strategy_compare"] = [x for x in sel if not (x.get("ticker") == ticker and x.get("name") == p.name)]
+                            st.rerun()
 
     with sa:
         _render_plans(f"{ticker_a} — {_dir_a.upper()} (Trend: {trend_a}, Regime: {regime_a})", ticker_a, plans_a)
     with sb:
         _render_plans(f"{ticker_b} — {_dir_b.upper()} (Trend: {trend_b}, Regime: {regime_b})", ticker_b, plans_b)
 
+    # Comparison card (up to 2 strategies)
+    comp = st.session_state.get("strategy_compare") or []
+    if comp:
+        st.markdown("#### Strategy Comparison")
+
+        def _fmt_money(v):
+            try:
+                return f"${float(v):,.2f}" if v is not None else "—"
+            except Exception:
+                return "—"
+
+        def _net_text(x):
+            dc = (x.get("debit_credit") or "").upper()
+            if dc == "CREDIT":
+                return f"CREDIT {_fmt_money(x.get('est_credit'))}"
+            if dc == "DEBIT":
+                return f"DEBIT {_fmt_money(x.get('est_cost'))}"
+            return "—"
+
+        def _to_col(series):
+            return {
+                "Ticker": series.get("ticker"),
+                "Strategy": series.get("name"),
+                "DTE": series.get("dte") if series.get("dte") is not None else "—",
+                "Net": _net_text(series),
+                "Max Loss": _fmt_money(series.get("max_loss")),
+                "Max Gain": _fmt_money(series.get("max_gain")),
+                "Breakeven(s)": ", ".join([f"{b:.2f}" for b in (series.get("breakevens") or [])]) if series.get("breakevens") else "—",
+                "R:R": (f"{float(series.get('rr_ratio')):.2f}" if series.get("rr_ratio") is not None else "—"),
+                "Capital": _fmt_money(series.get("capital_req")),
+            }
+
+        import pandas as _pd  # local alias to avoid top-level import
+        cols = [_to_col(x) for x in comp[:2]]
+        df = _pd.DataFrame(cols)
+        st.dataframe(df, use_container_width=True)
+        cclear, _ = st.columns([1, 4])
+        with cclear:
+            if st.button("Clear selection", key="clear_strategy_compare"):
+                st.session_state["strategy_compare"] = []
+                st.rerun()
+
 # --- Sizing tab ---
 with tab_sizing:
     st.markdown("#### Position Sizing (based on implied move & recent vol)")
     st.caption("Includes **Baseline** (implied-move–anchored) and **ATR-based** suggestions.")
+    # Risk budget badge (profile % of equity)
+    try:
+        prof = (risk_profile or "Balanced").lower()
+        frac = 0.005 if prof.startswith("cons") else (0.02 if prof.startswith("aggr") else 0.01)
+        rb = float(account_equity) * float(frac)
+        st.markdown(f"**Risk budget:** ${rb:,.0f} (at {int(frac*100)}%)")
+    except Exception:
+        st.caption("Risk budget unavailable.")
     with st.spinner("Computing sizing..."):
         size_a_df = sizing_summary_table(
             ticker=ticker_a,
