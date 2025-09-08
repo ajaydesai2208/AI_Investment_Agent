@@ -21,34 +21,23 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
 - Price charts with optional normalization (index to 100)
 
 - News & filings ingestion with toggles
-
--- Yahoo Finance RSS, yfinance API
-
--- Reuters RSS (filtered by ticker/company name)
-
--- SEC EDGAR filings (8-K, 10-Q, 10-K, S-1, S-3, 424B5, 6-K)
+  - Yahoo Finance RSS, yfinance API
+  - Reuters RSS (filtered by ticker/company name)
+  - SEC EDGAR filings (8-K, 10-Q, 10-K, S-1, S-3, 424B5, 6-K)
 
 - Options snapshot
-
--- Nearest expiry (auto 7–45 DTE) or pick a specific expiry
-
--- ATM call/put mids, ATM strike, straddle debit, implied move, approximate ATM IV
-
--- ATM Greeks (per contract)
-
--- Strategy Picker (debit/credit verticals, CSP, covered/collar) with add-to-report and add-to-tickets
+  - Nearest expiry (auto 7–45 DTE) or pick a specific expiry
+  - ATM call/put mids, ATM strike, straddle debit, implied move, approximate ATM IV
+  - ATM Greeks (per contract)
+  - Strategy Picker (debit/credit verticals, CSP, covered/collar) with add-to-report and add-to-tickets
 
 - Position sizing
-
--- Profile-based risk budget (Conservative / Balanced / Aggressive)
-
--- Equity share size and debit options contract count using implied move and recent vol
-
--- Baseline (implied-move anchored) and ATR-based sizing, plus a stock Trade Plan (entry/stop/targets)
+  - Profile-based risk budget (Conservative / Balanced / Aggressive)
+  - Equity share size and debit options contract count using implied move and recent vol
+  - Baseline (implied-move anchored) and ATR-based sizing, plus a stock Trade Plan (entry/stop/targets)
 
 - Time-aware prompt
-
--- Today’s date is passed to the model; it avoids guessing dates and labels past vs upcoming items
+  - Today’s date is passed to the model; it avoids guessing dates and labels past vs upcoming items
 
 - Fundamentals (TTM) with extended valuation/returns: P/E, P/S, EV/EBITDA, ROIC (approx)
 
