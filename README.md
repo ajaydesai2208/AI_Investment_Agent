@@ -67,6 +67,8 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
 
 - Two-way OpenAI key handling and .env/secrets integration
 
+- Ticker autocomplete: type a ticker or company name to see suggestions (case-insensitive, prefix+substring, scrollable; SEC company list + Yahoo live search for new IPOs; cached)
+
 - .env is git-ignored by default
 
 ---
@@ -89,6 +91,8 @@ source .venv/bin/activate
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+# if you manage deps manually, ensure this extra UI component is installed:
+# pip install streamlit-searchbox
 ```
 
 ### 2) Provide an API key

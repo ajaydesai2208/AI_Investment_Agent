@@ -10,11 +10,13 @@ import pandas as pd
 import requests
 import streamlit as st
 import yfinance as yf
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # Public exports
 __all__ = [
     "get_recent_news",
     "format_news_digest",
+    "format_news_table",
     "clear_news_cache",
 ]
 
@@ -331,6 +333,17 @@ def get_recent_news(
     sec_items = _fetch_sec_filings(ticker) if use_sec else []
 
     merged = _dedupe_and_filter((rss or []) + (yf_items or []) + (reuters or []) + (sec_items or []), days, limit)
+
+    # Sentiment scoring (headline-only; fast and cached)
+    try:
+        analyzer = SentimentIntensityAnalyzer()
+        for it in merged:
+            title = it.get("title") or ""
+            vs = analyzer.polarity_scores(title)
+            it["sentiment"] = vs.get("compound", 0.0)
+    except Exception:
+        for it in merged:
+            it["sentiment"] = 0.0
     return {
         "merged": merged,
         "by_source": {
@@ -362,6 +375,30 @@ def format_news_digest(ticker: str, news: List[Dict]) -> str:
         tag = "FILING" if src == "sec_edgar" else ("Reuters" if src == "reuters_rss" else pub)
         lines.append(f"- [{date_str}] {ticker} — {tag}: {title} ({url})")
     return "\n".join(lines)
+
+
+def format_news_table(news: List[Dict]) -> pd.DataFrame:
+    """
+    Build a compact DataFrame with date, publisher/source, title, sentiment.
+    """
+    if not news:
+        return pd.DataFrame(columns=["Date", "Source", "Title", "Sentiment"])
+    rows = []
+    for n in news:
+        dt = n.get("published")
+        try:
+            date_str = pd.to_datetime(dt).strftime("%Y-%m-%d")
+        except Exception:
+            date_str = "NA"
+        src = n.get("source") or ""
+        tag = "FILING" if src == "sec_edgar" else ("Reuters" if src == "reuters_rss" else (n.get("publisher") or ""))
+        rows.append([
+            date_str,
+            tag,
+            n.get("title") or "",
+            round(float(n.get("sentiment", 0.0)), 3),
+        ])
+    return pd.DataFrame(rows, columns=["Date", "Source", "Title", "Sentiment"])
 
 
 def clear_news_cache() -> None:

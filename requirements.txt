@@ -6,3 +6,5 @@ python-dotenv
 feedparser
 requests
 reportlab>=4.0.0
+streamlit-searchbox
+vaderSentiment

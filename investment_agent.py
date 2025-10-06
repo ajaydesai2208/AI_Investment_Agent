@@ -441,10 +441,36 @@ with st.sidebar:
 # ---------------- Tickers & Expiries ----------------
 
 col1, col2 = st.columns(2)
-ticker_a = col1.text_input("Ticker A", value="NVDA").strip().upper()
-ticker_b = col2.text_input("Ticker B", value="ANET").strip().upper()
+from streamlit_searchbox import st_searchbox
+from ai_agent.symbols import search_symbols, format_symbol_label
 
-# Basic validity check before enabling action
+# Autocomplete search boxes (typeahead, dynamic) rendered side-by-side
+with col1:
+    sel_a = st_searchbox(
+        search_function=lambda q: [format_symbol_label(m, q) for m in search_symbols(q, limit=100)],
+        placeholder="e.g., AAPL or Apple",
+        label="Ticker A",
+        key="sb_tkr_a",
+    )
+with col2:
+    sel_b = st_searchbox(
+        search_function=lambda q: [format_symbol_label(m, q) for m in search_symbols(q, limit=100)],
+        placeholder="e.g., MSFT or Microsoft",
+        label="Ticker B",
+        key="sb_tkr_b",
+    )
+
+def _extract_ticker(selection: str) -> str:
+    if not selection:
+        return ""
+    # Expect format "TICKER — NAME"; fallback to raw
+    parts = str(selection).split(" — ", 1)
+    return parts[0].strip().upper() if parts and parts[0] else str(selection).strip().upper()
+
+ticker_a = _extract_ticker(sel_a)
+ticker_b = _extract_ticker(sel_b)
+
+# Basic validity check before enabling action (compute after suggestions wiring)
 tickers_ok = _is_valid_ticker(ticker_a) and _is_valid_ticker(ticker_b)
 
 expiry_a = None
@@ -712,7 +738,12 @@ with tab_news:
                     f"Reuters: {len(news_a_all['by_source'].get('reuters_rss', []))} | "
                     f"SEC: {len(news_a_all['by_source'].get('sec_edgar', []))}"
                 )
-                st.write(format_news_digest(ticker_a, news_a))
+                try:
+                    from ai_agent.news import format_news_table
+                    tbl_a = format_news_table(news_a)
+                    st.dataframe(tbl_a, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write(format_news_digest(ticker_a, news_a))
         with coln2:
             with st.expander(f"{ticker_b} news ({len(news_b)})", expanded=True):
                 st.caption(
@@ -722,7 +753,12 @@ with tab_news:
                     f"Reuters: {len(news_b_all['by_source'].get('reuters_rss', []))} | "
                     f"SEC: {len(news_b_all['by_source'].get('sec_edgar', []))}"
                 )
-                st.write(format_news_digest(ticker_b, news_b))
+                try:
+                    from ai_agent.news import format_news_table
+                    tbl_b = format_news_table(news_b)
+                    st.dataframe(tbl_b, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write(format_news_digest(ticker_b, news_b))
     else:
         st.info("Press **Compare & Analyze** to fetch the latest news & filings with your current source toggles.")
 
