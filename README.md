@@ -127,28 +127,62 @@ Open the URL shown in the terminal (usually http://localhost:8501). Enter two ti
 ## Project Structure
 ```bash
 AI_Investment_Agent/
-├─ investment_agent.py           # Streamlit app (single entry point)
+├─ investment_agent.py           # Streamlit app orchestrator (thin)
+├─ ui/                           # UI package (no behavior changes)
+│  ├─ __init__.py
+│  ├─ page.py                    # page config, global CSS, high-contrast toggler
+│  ├─ background.py              # background cache refresher
+│  ├─ state.py                   # session_state initialization
+│  ├─ helpers.py                 # shared helpers (formatting, validation, inference)
+│  ├─ sidebar.py                 # sidebar controls (auth, display, strategy, sources, expiry)
+│  ├─ tickers.py                 # ticker search inputs and expiry pickers
+│  ├─ preload.py                 # snapshots, options, catalysts, pair, spark/trend/regime
+│  ├─ stat_bar.py                # top stat grid and 3M sparklines
+│  ├─ analysis_runner.py         # run_analysis implementation
+│  └─ tabs/
+│     ├─ overview.py             # chart, snapshot, fundamentals, catalysts, pair analyzer
+│     ├─ news.py                 # news/filings with source breakdown
+│     ├─ options.py              # options snapshot, greeks, strategy picker and compare
+│     ├─ sizing.py               # sizing tables and stock trade plan
+│     ├─ scenarios.py            # scenarios table and payoff charts
+│     └─ report.py               # report render, PDF/MD export, tickets, playbook
 ├─ ai_agent/
-│  ├─ __init__.py                # marks package (can be empty)
-│  ├─ settings.py                # key loading (.env, st.secrets, UI)
-│  ├─ news.py                    # Yahoo/yfinance + Reuters + SEC sources, toggles, formatting
-│  ├─ prices.py                  # price history merge, normalization, chart data
-│  ├─ metrics.py                 # snapshots, returns/momentum, compare table, facts pack
-│  ├─ options.py                 # expiry list, ATM snapshot, implied move, IV
-│  ├─ greeks.py                  # Black–Scholes + ATM Greeks table (per contract)
-│  ├─ quant.py                   # OHLC/close helpers, ATR/vol, pair analytics
-│  ├─ risk.py                    # risk profiles, baseline+ATR sizing, stock Trade Plan
-│  ├─ scenario.py                # scenarios & dense payoff grid for charts
-│  ├─ strategies.py              # build/format strategies for Options tab
-│  ├─ tickets.py                 # trade tickets + CSV export
-│  ├─ playbook.py                # event-driven tactics builder
-│  ├─ prompts.py                 # time-aware, structured prompt builder (no italics/bold)
-│  ├─ agent.py                   # OpenAI agent wrapper
-│  └─ export.py                  # sanitize + build Markdown + PDF export
-├─ requirements.txt              # streamlit, agno, openai, yfinance, pandas, python-dotenv, feedparser requests, reportlab
-├─ .gitignore                    # ignores .env, venv, caches, editor files
+│  ├─ __init__.py
+│  ├─ settings.py
+│  ├─ news.py
+│  ├─ prices.py
+│  ├─ metrics.py
+│  ├─ options.py
+│  ├─ greeks.py
+│  ├─ quant.py
+│  ├─ risk.py
+│  ├─ scenario.py
+│  ├─ strategies.py
+│  ├─ tickets.py
+│  ├─ playbook.py
+│  ├─ prompts.py
+│  ├─ agent.py
+│  └─ export.py
+├─ requirements.txt
+├─ .gitignore
 └─ README.md
 ```
+
+## Running
+
+1) Create/activate the virtual environment (first time only), then install deps:
+```bash
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+2) Start the app:
+```bash
+streamlit run investment_agent.py
+```
+
+The UI and behavior are unchanged. The app now imports UI components from `ui/` while keeping all data logic under `ai_agent/`.
 
 ## Configuration
 The app looks for an OpenAI key in this order:
