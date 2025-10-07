@@ -4,7 +4,7 @@ primaryColor = "#00C805"            # Robinhood green
 backgroundColor = "#0A0F14"         # near-black slate
 secondaryBackgroundColor = "#11181F" # card panels
 textColor = "#E6F2E6"               # soft mint text
-font = "Inter"
+font = "monospace"
 
 [server]
 headless = true

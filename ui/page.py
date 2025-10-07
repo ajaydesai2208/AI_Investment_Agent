@@ -13,6 +13,23 @@ def inject_global_css() -> None:
     st.markdown(
         """
         <style>
+          /* Load IBM Plex Mono for a retro terminal feel */
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+          :root {
+            --app-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+          }
+
+          /* Apply mono font globally across the app */
+          html, body, h1, h2, h3, h4, h5, h6,
+          .stMarkdown, .stTextInput input, .stTextArea textarea, .stSelectbox, .stMultiSelect, .stNumberInput input,
+          .stDataFrame, .stColumn, .stTabs, .stMetric, .stCaption,
+          .stButton>button, .stDownloadButton>button,
+          input, textarea, select, button, code, pre, kbd, samp, table, th, td {
+            font-family: var(--app-font-mono) !important;
+            letter-spacing: .2px;
+          }
+
           .block-container {padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1300px;}
           h1, h2, h3, h4 {letter-spacing: .2px;}
 
