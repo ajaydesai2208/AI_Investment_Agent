@@ -11,6 +11,7 @@ __all__ = [
     "sanitize_styling",
     "dataframe_to_markdown",
     "build_markdown_package",
+    "build_pdf_report",
 ]
 
 
@@ -63,6 +64,7 @@ def build_markdown_package(
     metadata: Dict[str, str],
     facts_block: Optional[str] = None,
     options_table: Optional[pd.DataFrame] = None,
+    theme: str | None = None,
 ) -> Tuple[str, bytes]:
     """
     Compose a single .md file that includes:
@@ -84,8 +86,22 @@ def build_markdown_package(
 
     pieces = []
 
-    pieces.append(f"# AI Investment Report: {tka} vs {tkb}\n")
-    pieces.append(f"_Generated: {now}_\n")
+    # Terminal-style ASCII banner (optional)
+    if (theme or "").lower() == "terminal":
+        banner = [
+            "+------------------------------------------------------------+",
+            f"| AI Investment Report: {tka} vs {tkb:<30}"[:60] + "|",
+            f"| Generated: {now:<44}"[:60] + "|",
+            "+------------------------------------------------------------+",
+            "",
+        ]
+        pieces.extend(banner)
+        # Also include plain two-line header for readability in viewers
+        pieces.append(f"# AI Investment Report: {tka} vs {tkb}\n")
+        pieces.append(f"_Generated: {now}_\n")
+    else:
+        pieces.append(f"# AI Investment Report: {tka} vs {tkb}\n")
+        pieces.append(f"_Generated: {now}_\n")
     pieces.append("## Parameters\n")
     pieces.append(f"- **Timeframe:** {timeframe}")
     pieces.append(f"- **Risk profile:** {risk_profile}")
@@ -131,18 +147,28 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 
-def _as_table(dataframe: Optional[pd.DataFrame], col_widths: Optional[List[int]] = None):
+def _as_table(dataframe: Optional[pd.DataFrame], col_widths: Optional[List[int]] = None, *, theme: str | None = None):
     if dataframe is None or dataframe.empty:
         return None
     data = [list(dataframe.columns)] + dataframe.astype(str).values.tolist()
     tbl = Table(data, colWidths=col_widths)
+    if (theme or "").lower() == "terminal":
+        hdr_bg = colors.HexColor("#EAF6EA")
+        hdr_tx = colors.HexColor("#0b4f0b")
+        grid = colors.HexColor("#bcdcbc")
+        rowbg = [colors.white, colors.HexColor("#F5FBF5")]
+    else:
+        hdr_bg = colors.HexColor("#eaf6ea")
+        hdr_tx = colors.HexColor("#0b4f0b")
+        grid = colors.HexColor("#bcdcbc")
+        rowbg = [colors.white, colors.HexColor("#f7fbf7")]
     tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eaf6ea")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0b4f0b")),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#bcdcbc")),
+        ("BACKGROUND", (0, 0), (-1, 0), hdr_bg),
+        ("TEXTCOLOR", (0, 0), (-1, 0), hdr_tx),
+        ("GRID", (0, 0), (-1, -1), 0.25, grid),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7fbf7")]),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), rowbg),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
@@ -198,6 +224,7 @@ def build_pdf_report(
     scenarios_a_df: Optional[pd.DataFrame] = None,
     scenarios_b_df: Optional[pd.DataFrame] = None,
     tickets_df: Optional[pd.DataFrame] = None,
+    theme: str | None = None,
 ) -> tuple[str, bytes]:
     """
     Build a single PDF bytes object containing:
@@ -219,6 +246,19 @@ def build_pdf_report(
 
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="Small", fontSize=8, leading=10, textColor=colors.HexColor("#333333")))
+    if (theme or "").lower() == "terminal":
+        # Monospace flavor and green accents
+        for k in ("BodyText", "Heading1", "Heading2", "Heading3", "Title", "Bullet"):
+            try:
+                styles[k].fontName = "Courier"
+            except Exception:
+                pass
+        try:
+            styles["Heading1"].textColor = colors.HexColor("#0b4f0b")
+            styles["Heading2"].textColor = colors.HexColor("#0b4f0b")
+            styles["Heading3"].textColor = colors.HexColor("#0b4f0b")
+        except Exception:
+            pass
     story: List = []
 
     # Title
@@ -229,7 +269,7 @@ def build_pdf_report(
     if metadata:
         meta_rows = [[k, str(v)] for k, v in metadata.items()]
         meta_df = pd.DataFrame(meta_rows, columns=["Key", "Value"])
-        meta_tbl = _as_table(meta_df, col_widths=[120, 360])
+        meta_tbl = _as_table(meta_df, col_widths=[120, 360], theme=theme)
         if meta_tbl:
             story.append(meta_tbl)
             story.append(Spacer(1, 12))
@@ -242,19 +282,19 @@ def build_pdf_report(
     # Options
     if options_table is not None and not options_table.empty:
         story.append(Paragraph("Options Snapshot", styles["Heading2"]))
-        tbl = _as_table(options_table)
+        tbl = _as_table(options_table, theme=theme)
         if tbl: story.append(tbl)
         story.append(Spacer(1, 12))
 
     # Fundamentals
     if fundamentals_a is not None and not fundamentals_a.empty:
         story.append(Paragraph("Fundamentals — A", styles["Heading2"]))
-        tbl_a = _as_table(fundamentals_a)
+        tbl_a = _as_table(fundamentals_a, theme=theme)
         if tbl_a: story.append(tbl_a)
         story.append(Spacer(1, 8))
     if fundamentals_b is not None and not fundamentals_b.empty:
         story.append(Paragraph("Fundamentals — B", styles["Heading2"]))
-        tbl_b = _as_table(fundamentals_b)
+        tbl_b = _as_table(fundamentals_b, theme=theme)
         if tbl_b: story.append(tbl_b)
         story.append(Spacer(1, 12))
 
@@ -299,19 +339,19 @@ def build_pdf_report(
     # --- NEW: Scenarios (A & B)
     if scenarios_a_df is not None and not scenarios_a_df.empty:
         story.append(Paragraph("Scenarios — A", styles["Heading2"]))
-        tbl_sca = _as_table(scenarios_a_df)
+        tbl_sca = _as_table(scenarios_a_df, theme=theme)
         if tbl_sca: story.append(tbl_sca)
         story.append(Spacer(1, 8))
     if scenarios_b_df is not None and not scenarios_b_df.empty:
         story.append(Paragraph("Scenarios — B", styles["Heading2"]))
-        tbl_scb = _as_table(scenarios_b_df)
+        tbl_scb = _as_table(scenarios_b_df, theme=theme)
         if tbl_scb: story.append(tbl_scb)
         story.append(Spacer(1, 12))
 
     # --- NEW: Tickets preview
     if tickets_df is not None and not tickets_df.empty:
         story.append(Paragraph("Tickets Preview", styles["Heading2"]))
-        tbl_t = _as_table(tickets_df)
+        tbl_t = _as_table(tickets_df, theme=theme)
         if tbl_t: story.append(tbl_t)
         story.append(Spacer(1, 12))
 

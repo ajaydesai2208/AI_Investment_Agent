@@ -161,6 +161,7 @@ def run_analysis(
             ],
             columns=["Metric", ticker_a, ticker_b],
         ),
+        theme="terminal",
     )
     return sanitized, fname, fbytes
 
