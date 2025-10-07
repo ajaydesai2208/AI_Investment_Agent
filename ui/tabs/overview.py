@@ -60,4 +60,7 @@ def render_overview_tab(*, ticker_a: str, ticker_b: str, a_snap: dict, b_snap: d
     with ccol2:
         st.markdown(cat_md_b)
 
+    # End-cap guard to prevent ghost content bleeding
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
+
 

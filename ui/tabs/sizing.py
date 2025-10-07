@@ -85,6 +85,9 @@ def render_sizing_tab(*, ticker_a, ticker_b, a_snap, b_snap, opt_a, opt_b, risk_
         else:
             st.dataframe(tp_b.to_dataframe(), width='stretch')
 
+    # End-cap guard to prevent ghost content bleeding
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
+
     # return for report usage
     return size_a_df, size_b_df
 

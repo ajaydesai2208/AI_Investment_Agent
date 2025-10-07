@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Optional, Tuple
 from datetime import datetime, timezone, date
@@ -106,7 +106,7 @@ ensure_bg_refresher_started()
 
 st.title("AI Investment Agent")
 st.caption(
-    "Compare two tickers using Yahoo Finance data, options context, catalysts, and a GPT model — with Reuters + SEC filings."
+    "Compare two tickers using Yahoo Finance data, options context, catalysts, and a GPT model â€” with Reuters + SEC filings."
 )
 
 init_session_state()
@@ -182,11 +182,13 @@ tab_overview, tab_news, tab_options, tab_sizing, tab_scenarios, tab_report = st.
 with tab_overview:
     from ui.tabs.overview import render_overview_tab
     render_overview_tab(ticker_a=ticker_a, ticker_b=ticker_b, a_snap=a_snap, b_snap=b_snap, cat_md_a=cat_md_a, cat_md_b=cat_md_b, pair=pair)
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 # --- News tab ---
 with tab_news:
     from ui.tabs.news import render_news_tab
     render_news_tab(ticker_a=ticker_a, ticker_b=ticker_b, go=go, hf_mode=hf_mode, lookback_days=lookback_days, max_news=max_news, use_rss=use_rss, use_yf=use_yf, use_reuters=use_reuters, use_sec=use_sec)
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 with tab_options:
     from ui.tabs.options import render_options_tab
@@ -203,6 +205,7 @@ with tab_options:
             risk_profile=risk_profile,
         expiry_mode=expiry_mode,
     )
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 with tab_sizing:
     from ui.tabs.sizing import render_sizing_tab
@@ -219,6 +222,7 @@ with tab_sizing:
         trend_a=trend_a,
         trend_b=trend_b,
     )
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 # --- Scenarios tab (stock & ATM option P/L ladders) ---
 with tab_scenarios:
@@ -234,6 +238,7 @@ with tab_scenarios:
         trend_a=trend_a,
         trend_b=trend_b,
     )
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 
 # --- Report tab (shows shimmer if running, or displays stored result) ---
@@ -243,6 +248,7 @@ with tab_report:
         # Show shimmer loading effect
         from ui.components.shimmer import render_report_shimmer
         render_report_shimmer()
+        st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
     elif st.session_state.get("report_markdown"):
         # Render the report if it exists (use fresh session state data)
         from ui.tabs.report import render_report_tab
@@ -266,6 +272,11 @@ with tab_report:
             size_a_df=locals().get("size_a_df"),
             size_b_df=locals().get("size_b_df"),
         )
+        st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
+    else:
+        # Friendly prompt when there's no report yet
+        st.info("Press Compare & Analyze to generate a full report. The Report tab will appear here once ready.")
+        st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
 
 
 # ---------------- Analysis Logic (OUTSIDE tabs, runs globally) ----------------
@@ -279,7 +290,7 @@ if go:
         # Use the placeholder that's ABOVE the tabs to show status
         with status_placeholder.container():
             try:
-                status = st.status("Starting analysis…", expanded=True)
+                status = st.status("Starting analysisâ€¦", expanded=True)
             except Exception:
                 status = None
             progress = st.progress(0)
@@ -310,8 +321,8 @@ if go:
                 st.session_state["export_fname"] = fname
                 st.session_state["export_bytes"] = fbytes
                 # Level 1: Clear all caches to cover data + resources
-                st.cache_data.clear()
-                st.cache_resource.clear()  # Add this
+                # st.cache_data.clear()
+                # st.cache_resource.clear()  # Add this
                 
                 # Level 2: Increment analysis counter for tab keys
                 st.session_state["analysis_counter"] = st.session_state.get("analysis_counter", 0) + 1
@@ -328,3 +339,5 @@ if go:
                 if status: status.update(label="Analysis failed.", state="error")
                 st.exception(e)
                 st.session_state["analysis_in_progress"] = False
+
+

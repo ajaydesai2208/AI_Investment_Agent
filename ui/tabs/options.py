@@ -204,4 +204,7 @@ def render_options_tab(*, ticker_a, ticker_b, opt_a, opt_b, pair, trend_a, trend
                 st.session_state["strategy_compare"] = []
                 st.rerun()
 
+    # End-cap guard to prevent ghost content bleeding
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
+
 

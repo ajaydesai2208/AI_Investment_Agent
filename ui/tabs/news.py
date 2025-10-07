@@ -63,4 +63,7 @@ def render_news_tab(*, ticker_a: str, ticker_b: str, go: bool, hf_mode: bool, lo
     else:
         st.info("Press **Compare & Analyze** to fetch the latest news & filings with your current source toggles.")
 
+    # End-cap guard to prevent ghost content bleeding
+    st.markdown('<div class="tab-bleed-guard"></div>', unsafe_allow_html=True)
+
 

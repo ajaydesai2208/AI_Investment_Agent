@@ -22,6 +22,8 @@ def inject_global_css() -> None:
             --btn-h-sm: 34px;
             --btn-h-md: 42px;
             --btn-h-lg: 48px;
+            /* App background fallback for bleed-guard */
+            --app-bg: #0B1217;
           }
 
           /* Apply mono font globally across the app */
@@ -131,6 +133,11 @@ def inject_global_css() -> None:
           .stTabs [data-baseweb="tab-highlight"] {
             background: linear-gradient(90deg, rgba(0,200,5,.35), rgba(0,200,5,.08));
           }
+          /* Ensure tab panels are opaque to prevent ghost content bleed-through */
+          .stTabs [data-baseweb="tab-panel"] {
+            background: var(--app-bg, #0B1217);
+            position: relative;
+          }
           
           /* Shimmer loading animation for Report tab */
           @keyframes shimmer {
@@ -167,6 +174,10 @@ def inject_global_css() -> None:
             from { opacity: 0; }
             to { opacity: 1; }
           }
+
+          /* Uniform stat bar at top */
+          /* Bleed guard block to cap the end of each tab and mask hidden content */
+          .tab-bleed-guard { height: 72px; background: var(--app-bg, #0B1217); margin-top: 16px; border-radius: 0 0 8px 8px; }
 
           /* Uniform stat bar at top */
           .stat-grid {

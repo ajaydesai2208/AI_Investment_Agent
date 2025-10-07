@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import streamlit as st
 
@@ -22,5 +22,6 @@ def render_report_shimmer():
         ''',
         unsafe_allow_html=True
     )
-    st.caption("⚡ Generating investment analysis... This may take 30-60 seconds.")
+    st.caption("Generating investment analysis... This may take 30–60 seconds.")
+
 
