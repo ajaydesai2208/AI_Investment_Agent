@@ -12,6 +12,8 @@ def init_session_state() -> None:
         ("selected_strategies_md", []),
         ("tickets_extra", []),
         ("ui_high_contrast", False),
+        ("analysis_in_progress", False),
+        ("active_tab", "Overview"),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default

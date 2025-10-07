@@ -152,6 +152,19 @@ render_stat_bar(
 render_sparklines(ticker_a=ticker_a, ticker_b=ticker_b, spark_a=spark_a, spark_b=spark_b)
 
 
+# ---------------- Global Status Placeholder (ABOVE tabs) ----------------
+# This placeholder reserves space above tabs for the status bar
+status_placeholder = st.empty()
+
+# Set analysis_in_progress state BEFORE tabs render so shimmer can show
+# Only set if we're starting a NEW analysis (button clicked and no existing report)
+if go and not st.session_state.get("report_markdown"):
+    st.session_state["analysis_in_progress"] = True
+elif not go:
+    # Clear the flag if button is not clicked (prevents shimmer from sticking)
+    st.session_state["analysis_in_progress"] = False
+
+
 # ---------------- Tabs ----------------
 
 tab_overview, tab_news, tab_options, tab_sizing, tab_scenarios, tab_report = st.tabs(
@@ -216,16 +229,48 @@ with tab_scenarios:
     )
 
 
+# --- Report tab (shows shimmer if running, or displays stored result) ---
+with tab_report:
+    # Check if analysis is currently running
+    if st.session_state.get("analysis_in_progress", False):
+        # Show shimmer loading effect
+        from ui.components.shimmer import render_report_shimmer
+        render_report_shimmer()
+    else:
+        # Render the report if it exists
+        from ui.tabs.report import render_report_tab
+        render_report_tab(
+            ticker_a=ticker_a,
+            ticker_b=ticker_b,
+            a_snap=a_snap,
+            b_snap=b_snap,
+            opt_a=opt_a,
+            opt_b=opt_b,
+            cat_a=cat_a,
+            cat_b=cat_b,
+            trend_a=trend_a,
+            trend_b=trend_b,
+            regime_a=regime_a,
+            regime_b=regime_b,
+            risk_profile=risk_profile,
+            lookback_days=lookback_days,
+            max_news=max_news,
+            pair=pair,
+            size_a_df=locals().get("size_a_df"),
+            size_b_df=locals().get("size_b_df"),
+        )
+
+
+# ---------------- Analysis Logic (OUTSIDE tabs, runs globally) ----------------
+
 from ui.analysis_runner import run_analysis
-
-
-# --- If the user pressed the button, run analysis NOW with visible status/progress ---
 
 if go:
     if not current_key:
-        st.error("No OpenAI key found. Add it in the sidebar or create a .env file with OPENAI_API_KEY.")
+        status_placeholder.error("No OpenAI key found. Add it in the sidebar or create a .env file with OPENAI_API_KEY.")
     else:
-        with status_container:
+        # Use the placeholder that's ABOVE the tabs to show status
+        with status_placeholder.container():
             try:
                 status = st.status("Starting analysis…", expanded=True)
             except Exception:
@@ -254,36 +299,12 @@ if go:
                     status_box=status,
                     progress_bar=progress,
                 )
-            except Exception as e:
-                if status: status.update(label="Analysis failed.", state="error")
-                st.exception(e)
-            else:
                 st.session_state["report_markdown"] = report_md
                 st.session_state["export_fname"] = fname
                 st.session_state["export_bytes"] = fbytes
+                st.session_state["analysis_in_progress"] = False
                 st.toast("Analysis ready — open the Report tab ✅")
-
-
-# --- Report tab (renders stored result) ---
-with tab_report:
-    from ui.tabs.report import render_report_tab
-    render_report_tab(
-        ticker_a=ticker_a,
-        ticker_b=ticker_b,
-        a_snap=a_snap,
-        b_snap=b_snap,
-        opt_a=opt_a,
-        opt_b=opt_b,
-        cat_a=cat_a,
-        cat_b=cat_b,
-        trend_a=trend_a,
-        trend_b=trend_b,
-        regime_a=regime_a,
-        regime_b=regime_b,
-                risk_profile=risk_profile,
-        lookback_days=lookback_days,
-        max_news=max_news,
-        pair=pair,
-        size_a_df=locals().get("size_a_df"),
-        size_b_df=locals().get("size_b_df"),
-    )
+            except Exception as e:
+                if status: status.update(label="Analysis failed.", state="error")
+                st.exception(e)
+                st.session_state["analysis_in_progress"] = False

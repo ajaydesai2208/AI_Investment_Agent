@@ -131,6 +131,42 @@ def inject_global_css() -> None:
           .stTabs [data-baseweb="tab-highlight"] {
             background: linear-gradient(90deg, rgba(0,200,5,.35), rgba(0,200,5,.08));
           }
+          
+          /* Shimmer loading animation for Report tab */
+          @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+          }
+
+          .report-loading-shimmer {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 2rem;
+            animation: fadeIn 0.3s ease-in;
+          }
+
+          .shimmer-block {
+            height: 24px;
+            background: linear-gradient(
+              90deg,
+              rgba(0,200,5,0.05) 0%,
+              rgba(0,200,5,0.15) 50%,
+              rgba(0,200,5,0.05) 100%
+            );
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite linear;
+            border-radius: 8px;
+          }
+
+          .shimmer-block.large { height: 120px; }
+          .shimmer-block.medium { height: 60px; }
+          .shimmer-block.small { height: 24px; }
+
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
 
           /* Uniform stat bar at top */
           .stat-grid {
