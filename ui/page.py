@@ -18,6 +18,10 @@ def inject_global_css() -> None:
 
           :root {
             --app-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+            /* Button sizing tokens */
+            --btn-h-sm: 34px;
+            --btn-h-md: 42px;
+            --btn-h-lg: 48px;
           }
 
           /* Apply mono font globally across the app */
@@ -46,29 +50,78 @@ def inject_global_css() -> None:
             border-bottom: 1px solid rgba(0,200,5,.18);
           }
 
-          /* Buttons: sharp, interactive */
-          .stButton>button, .stDownloadButton>button {
-            border-radius: 12px;
-            border: 1px solid #00C805;
-            background: linear-gradient(180deg, #00D60A 0%, #00B205 100%);
-            color: #051207;
-            font-weight: 700; letter-spacing: .2px;
-            padding: 0.55rem 0.9rem;
-            transition: transform .06s ease, box-shadow .2s ease, filter .2s ease;
-            box-shadow: 0 8px 24px rgba(0,200,5,.15), 0 0 0 1px rgba(0,200,5,.18) inset;
-            width: 100%;
-            min-height: 90px; /* ensure uniform height across wrapped/one-line labels */
-            display: inline-flex; align-items: center; justify-content: center; /* vertical centering */
-            text-align: center; white-space: normal; line-height: 1.15; /* allow wrapping but keep height consistent */
+          /* Buttons: sleek + modern */
+          .stButton>button, .stDownloadButton>button,
+          .stButton button, .stDownloadButton button {
+            min-height: var(--btn-h-sm) !important;
+            height: var(--btn-h-sm) !important;
+            padding: 0 12px !important;
+            border-radius: 10px !important;
+            border: 1px solid #00C805 !important;
+            background: linear-gradient(180deg, #1fd52a 0%, #10b018 100%) !important;
+            color: #051207 !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            letter-spacing: .15px !important;
+            width: fit-content !important; /* override Streamlit base full-width */
+            max-width: max-content !important;
+            flex: 0 0 auto !important;
+            transition: transform .06s ease, box-shadow .2s ease, filter .2s ease !important;
+            box-shadow: 0 6px 18px rgba(0,200,5,.18), 0 0 0 1px rgba(0,200,5,.18) inset !important;
+            display: inline-flex !important; align-items: center; justify-content: center; align-self: flex-start !important;
+            text-align: center; white-space: nowrap; line-height: 1;
           }
+          /* Streamlit base buttons (data-testid) */
+          button[data-testid^="stBaseButton"] {
+            min-height: var(--btn-h-sm) !important;
+            height: var(--btn-h-sm) !important;
+            padding: 0 12px !important;
+            width: fit-content !important;
+            max-width: max-content !important;
+            border-radius: 10px !important;
+            border: 1px solid #00C805 !important;
+            background: linear-gradient(180deg, #1fd52a 0%, #10b018 100%) !important;
+            color: #051207 !important;
+            font-weight: 700 !important;
+            letter-spacing: .15px !important;
+          }
+          /* Ensure containers don't force full-width */
+          .stButton, .stDownloadButton { width: auto !important; display: inline-flex !important; }
+          .stButton > div, .stDownloadButton > div { width: auto !important; display: inline-flex !important; }
           .stButton>button:hover, .stDownloadButton>button:hover {
             transform: translateY(-1px);
-            box-shadow: 0 10px 30px rgba(0,200,5,.28), 0 0 0 1px rgba(0,200,5,.2) inset;
-            filter: brightness(1.03);
+            box-shadow: 0 10px 26px rgba(0,200,5,.24), 0 0 0 1px rgba(0,200,5,.20) inset;
+            filter: brightness(1.04);
           }
-          .stButton>button:active, .stDownloadButton>button:active {
-            transform: translateY(0);
-            filter: brightness(.98);
+          .stButton>button:active, .stDownloadButton>button:active { transform: translateY(0); filter: brightness(.98); }
+          .stButton>button:focus-visible, .stDownloadButton>button:focus-visible { outline: 2px solid #00C805 !important; outline-offset: 2px; }
+          .stButton>button:disabled, .stDownloadButton>button:disabled { opacity: .55; transform: none; filter: none; cursor: not-allowed; }
+
+          /* Button rows for symmetry */
+          .btn-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+          .btn-row .stButton>button, .btn-row .stDownloadButton>button { flex: 0 0 auto; }
+          .btn-row.stretch .stButton>button, .btn-row.stretch .stDownloadButton>button { flex: 1 1 0; }
+
+          /* Actions panel: compact, aligned buttons */
+          .term-actions { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+          .term-actions .stButton>button, .term-actions .stDownloadButton>button { width: auto !important; }
+          .term-actions { justify-content: flex-start; }
+
+          /* Subtle interactive effect */
+          .stButton>button:hover, .stDownloadButton>button:hover { transform: translateY(-1px) scale(1.01); }
+
+          /* Sidebar: full-width, equal-sized buttons */
+          [data-testid="stSidebar"] .stButton, [data-testid="stSidebar"] .stDownloadButton {
+            width: 100% !important; display: block !important;
+          }
+          [data-testid="stSidebar"] .stButton > div, [data-testid="stSidebar"] .stDownloadButton > div {
+            width: 100% !important; display: block !important;
+          }
+          [data-testid="stSidebar"] .stButton>button, [data-testid="stSidebar"] .stDownloadButton>button {
+            min-height: var(--btn-h-sm) !important;
+            height: var(--btn-h-sm) !important;
+            padding: 0 12px !important;
+            width: 100% !important; /* full-width in sidebar */
           }
 
           /* Tabs */
@@ -119,7 +172,54 @@ def inject_global_css() -> None:
           @keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
           .skel-table { border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 12px; background: rgba(255,255,255,.02); }
           .skel-row { height: 14px; margin: 10px 0; border-radius: 6px; background: #121820; background-image: linear-gradient(90deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.15) 20%, rgba(255,255,255,0.05) 40%); background-size: 800px 100%; animation: shimmer 1.2s infinite; }
+
+          /* Primary CTA full-width, but sleek */
+          .primary-cta .stButton, .primary-cta .stButton > div { width: 100% !important; }
+          .primary-cta .stButton>button {
+            width: 100% !important;
+            min-height: 44px !important; height: 44px !important; /* slightly taller for emphasis */
+            padding: 0 16px !important;
+            border-radius: 12px !important;
+            background: linear-gradient(180deg, #22da2f 0%, #13b81a 100%) !important;
+            box-shadow: 0 10px 28px rgba(0,200,5,.28), 0 0 0 1px rgba(0,200,5,.18) inset !important;
+          }
+          .primary-cta .stButton>button:hover { transform: translateY(-1px) scale(1.005); filter: brightness(1.03); }
+          .primary-cta .stButton>button:active { transform: translateY(0) scale(1.0); filter: brightness(.98); }
         </style>
+        <script>
+          try {
+            const css = `
+              button[data-testid^="stBaseButton"]{
+                min-height: 34px !important; height:34px !important; padding:0 12px !important;
+                width: fit-content !important; max-width: max-content !important; border-radius:10px !important;
+              }
+              .stButton, .stDownloadButton{ width:auto !important; display:inline-flex !important; }
+              .stButton > div, .stDownloadButton > div{ width:auto !important; display:inline-flex !important; }
+              [data-testid="stSidebar"] button[data-testid^="stBaseButton"]{ width:100% !important; }
+            `;
+            const s = document.createElement('style');
+            s.setAttribute('data-ai-injection','buttons');
+            s.appendChild(document.createTextNode(css));
+            document.head.appendChild(s);
+
+            const tagCTA = () => {
+              const btns = Array.from(document.querySelectorAll('button[data-testid^="stBaseButton"]'));
+              const cta = btns.find(b => (b.textContent||'').trim().toLowerCase().includes('compare') );
+              if (cta) {
+                const wrap = cta.closest('[data-testid]') || cta.parentElement;
+                if (wrap) wrap.classList.add('primary-cta-wrap');
+                cta.style.width = '100%';
+                cta.style.minHeight = '44px';
+                cta.style.height = '44px';
+              }
+              // Sidebar buttons full width
+              const sBtns = document.querySelectorAll('[data-testid="stSidebar"] button[data-testid^="stBaseButton"]');
+              sBtns.forEach(b => { b.style.width = '100%'; b.style.minHeight = '34px'; b.style.height = '34px'; });
+            };
+            // Run now and after small delay to handle reruns
+            tagCTA(); setTimeout(tagCTA, 400); setTimeout(tagCTA, 1200);
+          } catch (e) {}
+        </script>
         """,
         unsafe_allow_html=True,
     )

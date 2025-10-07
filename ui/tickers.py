@@ -52,7 +52,10 @@ def render_tickers_and_expiry(expiry_mode: str):
         else:
             col4.write(f"• No expiries found for {ticker_b}")
 
-    go = st.button("Compare & Analyze", width='stretch', disabled=not tickers_ok)
+    # Primary CTA wrapper for full-width, sleek styling via CSS
+    st.markdown('<div class="primary-cta">', unsafe_allow_html=True)
+    go = st.button("Compare & Analyze", disabled=not tickers_ok)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if not tickers_ok:
         st.caption("Enter two valid tickers (A–Z, 0–9, '.', '-'). Example: AAPL, MSFT")
