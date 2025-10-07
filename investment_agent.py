@@ -160,6 +160,7 @@ status_placeholder = st.empty()
 # Only set if we're starting a NEW analysis (button clicked and no existing report)
 if go and not st.session_state.get("report_markdown"):
     st.session_state["analysis_in_progress"] = True
+    st.session_state["report_just_generated"] = False
 elif not go:
     # Clear the flag if button is not clicked (prevents shimmer from sticking)
     st.session_state["analysis_in_progress"] = False
@@ -167,9 +168,15 @@ elif not go:
 
 # ---------------- Tabs ----------------
 
-tab_overview, tab_news, tab_options, tab_sizing, tab_scenarios, tab_report = st.tabs(
-    ["Overview", "News", "Options", "Sizing", "Scenarios", "Report"]
-)
+# Initialize flags if not present
+if "analysis_counter" not in st.session_state:
+    st.session_state["analysis_counter"] = 0
+if "report_just_generated" not in st.session_state:
+    st.session_state["report_just_generated"] = False
+
+# Create tabs with clean names
+tab_names = ["Overview", "News", "Options", "Sizing", "Scenarios", "Report"]
+tab_overview, tab_news, tab_options, tab_sizing, tab_scenarios, tab_report = st.tabs(tab_names)
 
 # --- Overview tab ---
 with tab_overview:
@@ -236,8 +243,8 @@ with tab_report:
         # Show shimmer loading effect
         from ui.components.shimmer import render_report_shimmer
         render_report_shimmer()
-    else:
-        # Render the report if it exists
+    elif st.session_state.get("report_markdown"):
+        # Render the report if it exists (use fresh session state data)
         from ui.tabs.report import render_report_tab
         render_report_tab(
             ticker_a=ticker_a,
@@ -302,8 +309,21 @@ if go:
                 st.session_state["report_markdown"] = report_md
                 st.session_state["export_fname"] = fname
                 st.session_state["export_bytes"] = fbytes
+                # Level 1: Clear all caches to cover data + resources
+                st.cache_data.clear()
+                st.cache_resource.clear()  # Add this
+                
+                # Level 2: Increment analysis counter for tab keys
+                st.session_state["analysis_counter"] = st.session_state.get("analysis_counter", 0) + 1
+                
+                # Stop the shimmer by setting analysis_in_progress to False
                 st.session_state["analysis_in_progress"] = False
+                
                 st.toast("Analysis ready — open the Report tab ✅")
+                
+                # Use a simple rerun but with a flag to minimize disruption
+                st.session_state["report_just_generated"] = True
+                st.rerun()
             except Exception as e:
                 if status: status.update(label="Analysis failed.", state="error")
                 st.exception(e)
