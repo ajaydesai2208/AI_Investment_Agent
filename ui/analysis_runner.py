@@ -13,9 +13,10 @@ from ai_agent.prompts import build_prompt
 from ai_agent.agent import build_agent
 from ai_agent.settings import get_openai_key
 from ai_agent.export import sanitize_styling, build_markdown_package
-from ai_agent.news import get_recent_news, format_news_digest
+from ai_agent.news import format_news_digest
 from ai_agent.risk import sizing_summary_table
 from ui.helpers import _sizing_fact_line, _fmt_num, _run_agent_with_retries
+from ui.news_state import build_news_params, ensure_news_snapshot
 
 
 def run_analysis(
@@ -43,11 +44,26 @@ def run_analysis(
 ) -> Tuple[str, str, bytes]:
     if status_box:
         status_box.update(label="Fetching recent news & filings…", state="running")
-    news_kwargs = dict(use_rss=use_rss, use_yf=use_yf, use_reuters=use_reuters, use_sec=use_sec)
-    news_a_all = get_recent_news(ticker_a, lookback_days, max_news, **news_kwargs) if hf_mode else {"merged": [], "by_source": {}}
-    news_b_all = get_recent_news(ticker_b, lookback_days, max_news, **news_kwargs) if hf_mode else {"merged": [], "by_source": {}}
-    news_a = news_a_all["merged"]
-    news_b = news_b_all["merged"]
+    news_a_all = {"merged": [], "by_source": {}}
+    news_b_all = {"merged": [], "by_source": {}}
+    if hf_mode:
+        news_params = build_news_params(
+            ticker_a=ticker_a,
+            ticker_b=ticker_b,
+            lookback_days=lookback_days,
+            max_news=max_news,
+            use_rss=use_rss,
+            use_yf=use_yf,
+            use_reuters=use_reuters,
+            use_sec=use_sec,
+            hf_mode=hf_mode,
+        )
+        snapshot, _ = ensure_news_snapshot(news_params, force_refetch=False)
+        if snapshot:
+            news_a_all = snapshot.get("news_a_all") or news_a_all
+            news_b_all = snapshot.get("news_b_all") or news_b_all
+    news_a = news_a_all.get("merged", [])
+    news_b = news_b_all.get("merged", [])
     progress_bar.progress(30)
 
     if status_box:

@@ -24,6 +24,7 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
   - Yahoo Finance RSS, yfinance API
   - Reuters RSS (filtered by ticker/company name)
   - SEC EDGAR filings (8-K, 10-Q, 10-K, S-1, S-3, 424B5, 6-K)
+  - Latest snapshot persists after each analysis so you can review what the model saw (clear it with **Refresh caches**)
 
 - Options snapshot
   - Nearest expiry (auto 7–45 DTE) or pick a specific expiry
@@ -51,7 +52,7 @@ It generates a clear markdown report with tables, pros and cons, and a balanced 
 
 - Download the full report as Markdown and PDF (PDF includes fundamentals, catalysts, pair notes, sizing notes, strategies, playbook, scenarios, tickets)
 
-- Sidebar controls: source toggles, expiry mode, and a “Refresh caches” button
+- Sidebar controls: source toggles, expiry mode, and a “Refresh caches” button (clears stored news + catalysts)
 
 - Strategy comparison: select up to 2 strategies and compare Net (Debit/Credit), Max Loss/Gain, Breakevens, DTE, R:R, and Capital Requirement
 

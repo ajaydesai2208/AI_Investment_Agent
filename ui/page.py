@@ -133,10 +133,17 @@ def inject_global_css() -> None:
           .stTabs [data-baseweb="tab-highlight"] {
             background: linear-gradient(90deg, rgba(0,200,5,.35), rgba(0,200,5,.08));
           }
-          /* Ensure tab panels are opaque to prevent ghost content bleed-through */
+          /* Ensure tab panels are opaque and isolated to prevent bleed-through */
           .stTabs [data-baseweb="tab-panel"] {
             background: var(--app-bg, #0B1217);
+            background-color: var(--app-bg, #0B1217);
             position: relative;
+            isolation: isolate;
+            z-index: 0;
+          }
+          /* Hide inactive panels entirely to avoid overlaid ghost content */
+          .stTabs [data-baseweb="tab-panel"][aria-hidden="true"] {
+            display: none !important;
           }
           
           /* Shimmer loading animation for Report tab */

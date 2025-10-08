@@ -14,6 +14,8 @@ def init_session_state() -> None:
         ("ui_high_contrast", False),
         ("analysis_in_progress", False),
         ("active_tab", "Overview"),
+        ("news_snapshot", None),
+        ("news_digest_hash", None),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default

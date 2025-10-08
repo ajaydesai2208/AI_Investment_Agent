@@ -5,6 +5,7 @@ import streamlit as st
 from ai_agent.settings import get_openai_key
 from ai_agent.catalysts import clear_catalyst_cache
 from ai_agent.news import clear_news_cache
+from ui.news_state import clear_news_snapshot
 
 
 def render_sidebar():
@@ -58,6 +59,7 @@ def render_sidebar():
         if st.button("Refresh caches"):
             clear_news_cache()
             clear_catalyst_cache()
+            clear_news_snapshot()
             st.toast("News & catalysts caches cleared.")
 
     return (
